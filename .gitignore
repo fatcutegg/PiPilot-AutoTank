@@ -1,0 +1,63 @@
+# --- Python Specific ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# --- Virtual Environments ---
+.env
+.venv
+env/
+venv/
+ENV/
+
+# --- VS Code & IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- System Files ---
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+desktop.ini
+
+# --- AI/Research Specific (Large Data & Logs) ---
+# Exclude large datasets to keep git lightweight
+data/
+datasets/
+*.csv
+*.npy
+*.npz
+*.h5
+*.pth
+*.pt
+*.onnx
+
+# Exclude logs and model checkpoints
+logs/
+checkpoints/
+*.log
+
+# --- Project Specific ---
+# Add any hardware specific config lock files if necessary
+*.lock
