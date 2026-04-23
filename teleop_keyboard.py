@@ -1,45 +1,53 @@
+import RPi.GPIO as GPIO
+import time
 import sys
 from sshkeyboard import listen_keyboard
 
-# --- Tank Control Class ---
-# --- 戦車制御クラス ---
+# --- BCM Mapping based on your table ---
+# --- あなたのテーブルに基づいた BCM マッピング ---
+# Pin 19 -> GPIO 10, Pin 21 -> GPIO 9
+L_IN1, L_IN2 = 10, 9   
+# Pin 22 -> GPIO 25, Pin 23 -> GPIO 11
+R_IN1, R_IN2 = 25, 11  
+
 class TankController:
     def __init__(self):
-        print("--- Tank Teleop Initialized (SSH Mode) ---")
-        print("Use Arrow Keys to drive. Press 'q' to quit.")
+        GPIO.setmode(GPIO.BCM)
+        self.pins = [L_IN1, L_IN2, R_IN1, R_IN2]
+        for pin in self.pins:
+            GPIO.setup(pin, GPIO.OUT)
+            GPIO.output(pin, GPIO.LOW)
+        
+        # Self-test: Spin motors for 0.5s on start
+        print("Self-testing motors...")
+        self.move("UP")
+        time.sleep(0.5)
+        self.stop()
+        print("--- Ready! Use Arrows to drive, 'q' to quit ---")
 
-    def drive(self, direction):
-        # Implementation for movement
-        # 移動の実装
-        print(f"[DRIVE]: {direction}")
+    def move(self, direction):
+        # IN/IN Logic: One HIGH, One LOW
+        if direction == "UP":
+            GPIO.output(L_IN1, 1); GPIO.output(L_IN2, 0)
+            GPIO.output(R_IN1, 1); GPIO.output(R_IN2, 0)
+        elif direction == "DOWN":
+            GPIO.output(L_IN1, 0); GPIO.output(L_IN2, 1)
+            GPIO.output(R_IN1, 0); GPIO.output(R_IN2, 1)
+        # ... Other directions ...
 
     def stop(self):
-        # Implementation for stopping
-        # 停止の実装
-        print("[DRIVE]: STOP")
+        for pin in self.pins: GPIO.output(pin, 0)
 
 car = TankController()
 
 def press(key):
-    # Mapping keys to directions
-    # キーを方向にマッピングする
-    if key == "up":
-        car.drive("FORWARD")
-    elif key == "down":
-        car.drive("BACKWARD")
-    elif key == "left":
-        car.drive("LEFT")
-    elif key == "right":
-        car.drive("RIGHT")
+    if key in ["up", "down", "left", "right"]:
+        car.move(key.upper())
     elif key == "q":
-        print("Exiting...")
-        sys.exit()
+        car.stop(); GPIO.cleanup(); sys.exit()
 
 def release(key):
-    # Stop when the key is released
-    # キーが離されたら停止する
-    car.stop()
+    if key in ["up", "down", "left", "right"]:
+        car.stop()
 
-# --- Start listening ---
-# --- リスニングを開始する ---
 listen_keyboard(on_press=press, on_release=release)
