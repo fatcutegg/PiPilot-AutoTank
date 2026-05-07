@@ -1,5 +1,5 @@
 [Unit]
-Description=Tank Project Smart Fan Daemon
+Description=PiPilot-AutoTank Smart Fan Daemon
 After=multi-user.target
 
 [Service]
