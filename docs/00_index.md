@@ -11,3 +11,10 @@ Notion_Page_ID: 3590fc46777e80cea840f8f9b4833418
 ## 学習のロードマップ
 
 以下の各章（子ページ）を順番に進めて、すべてのミッションをクリアしよう！
+
+---
+
+## プロジェクトリポジトリ (Project Repository)
+
+最新のソースコードは以下のGitHubリポジトリで管理されています：
+[fatcutegg/tank_project](https://github.com/fatcutegg/tank_project)
