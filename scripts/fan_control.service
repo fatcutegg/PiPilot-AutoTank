@@ -1,0 +1,14 @@
+[Unit]
+Description=Tank Project Smart Fan Daemon
+After=multi-user.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/pi4mb/tank_project/scripts
+ExecStart=/usr/bin/python3 /home/pi4mb/tank_project/scripts/fan_daemon.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
