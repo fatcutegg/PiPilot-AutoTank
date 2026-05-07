@@ -2,8 +2,43 @@ import os
 import sys
 import argparse
 import yaml
+import re
 from dotenv import load_dotenv
 from notion_client import Client
+
+def parse_rich_text(text):
+    """Parses text for markdown links [text](url) and returns a list of Notion rich_text objects."""
+    parts = []
+    # Regex to find [text](url)
+    pattern = r'\[([^\]]+)\]\(([^)]+)\)'
+    last_end = 0
+    for match in re.finditer(pattern, text):
+        # Add plain text before the link
+        if match.start() > last_end:
+            parts.append({
+                "type": "text",
+                "text": {"content": text[last_end:match.start()]}
+            })
+        # Add the link
+        parts.append({
+            "type": "text",
+            "text": {
+                "content": match.group(1),
+                "link": {"url": match.group(2)}
+            }
+        })
+        last_end = match.end()
+    
+    # Add remaining plain text
+    if last_end < len(text):
+        parts.append({
+            "type": "text",
+            "text": {"content": text[last_end:]}
+        })
+    
+    if not parts:
+        return [{"type": "text", "text": {"content": text}}]
+    return parts
 
 def parse_frontmatter(md_content):
     """Parses YAML frontmatter from markdown and returns dict and the rest of content."""
@@ -80,31 +115,31 @@ def markdown_to_notion_blocks(markdown_text):
             blocks.append({
                 "object": "block",
                 "type": "heading_1",
-                "heading_1": {"rich_text": [{"type": "text", "text": {"content": line_stripped[2:]}}]}
+                "heading_1": {"rich_text": parse_rich_text(line_stripped[2:])}
             })
         elif line_stripped.startswith("## "):
             blocks.append({
                 "object": "block",
                 "type": "heading_2",
-                "heading_2": {"rich_text": [{"type": "text", "text": {"content": line_stripped[3:]}}]}
+                "heading_2": {"rich_text": parse_rich_text(line_stripped[3:])}
             })
         elif line_stripped.startswith("### "):
             blocks.append({
                 "object": "block",
                 "type": "heading_3",
-                "heading_3": {"rich_text": [{"type": "text", "text": {"content": line_stripped[4:]}}]}
+                "heading_3": {"rich_text": parse_rich_text(line_stripped[4:])}
             })
         elif line_stripped.startswith("- "):
             blocks.append({
                 "object": "block",
                 "type": "bulleted_list_item",
-                "bulleted_list_item": {"rich_text": [{"type": "text", "text": {"content": line_stripped[2:]}}]}
+                "bulleted_list_item": {"rich_text": parse_rich_text(line_stripped[2:])}
             })
         elif line_stripped[0].isdigit() and line_stripped[1:3] == ". ":
             blocks.append({
                 "object": "block",
                 "type": "numbered_list_item",
-                "numbered_list_item": {"rich_text": [{"type": "text", "text": {"content": line_stripped[3:]}}]}
+                "numbered_list_item": {"rich_text": parse_rich_text(line_stripped[3:])}
             })
         elif line_stripped.startswith("![") and "]" in line_stripped and "(" in line_stripped:
             blocks.append({
@@ -116,7 +151,7 @@ def markdown_to_notion_blocks(markdown_text):
             blocks.append({
                 "object": "block",
                 "type": "paragraph",
-                "paragraph": {"rich_text": [{"type": "text", "text": {"content": line_stripped}}]}
+                "paragraph": {"rich_text": parse_rich_text(line_stripped)}
             })
             
     return blocks
@@ -129,22 +164,42 @@ def blocks_to_markdown(blocks):
         if not b_type: continue
         
         if b_type == "paragraph":
-            text = "".join([rt["plain_text"] for rt in block["paragraph"]["rich_text"]])
+            text = ""
+            for rt in block["paragraph"]["rich_text"]:
+                if rt.get("link"):
+                    text += f"[{rt['plain_text']}]({rt['link']['url']})"
+                else:
+                    text += rt["plain_text"]
             md_lines.append(text)
         elif b_type == "heading_1":
-            text = "".join([rt["plain_text"] for rt in block["heading_1"]["rich_text"]])
+            text = ""
+            for rt in block["heading_1"]["rich_text"]:
+                if rt.get("link"): text += f"[{rt['plain_text']}]({rt['link']['url']})"
+                else: text += rt["plain_text"]
             md_lines.append(f"# {text}")
         elif b_type == "heading_2":
-            text = "".join([rt["plain_text"] for rt in block["heading_2"]["rich_text"]])
+            text = ""
+            for rt in block["heading_2"]["rich_text"]:
+                if rt.get("link"): text += f"[{rt['plain_text']}]({rt['link']['url']})"
+                else: text += rt["plain_text"]
             md_lines.append(f"## {text}")
         elif b_type == "heading_3":
-            text = "".join([rt["plain_text"] for rt in block["heading_3"]["rich_text"]])
+            text = ""
+            for rt in block["heading_3"]["rich_text"]:
+                if rt.get("link"): text += f"[{rt['plain_text']}]({rt['link']['url']})"
+                else: text += rt["plain_text"]
             md_lines.append(f"### {text}")
         elif b_type == "bulleted_list_item":
-            text = "".join([rt["plain_text"] for rt in block["bulleted_list_item"]["rich_text"]])
+            text = ""
+            for rt in block["bulleted_list_item"]["rich_text"]:
+                if rt.get("link"): text += f"[{rt['plain_text']}]({rt['link']['url']})"
+                else: text += rt["plain_text"]
             md_lines.append(f"- {text}")
         elif b_type == "numbered_list_item":
-            text = "".join([rt["plain_text"] for rt in block["numbered_list_item"]["rich_text"]])
+            text = ""
+            for rt in block["numbered_list_item"]["rich_text"]:
+                if rt.get("link"): text += f"[{rt['plain_text']}]({rt['link']['url']})"
+                else: text += rt["plain_text"]
             md_lines.append(f"1. {text}") 
         elif b_type == "code":
             text = "".join([rt["plain_text"] for rt in block["code"]["rich_text"]])
