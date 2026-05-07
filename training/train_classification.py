@@ -7,6 +7,9 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Conv2D, Flatten, Dense, Dropout, Input
 from tensorflow.keras.optimizers import Adam
 from sklearn.model_selection import train_test_split
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
 import config
 
 # --- 設定 (Settings) ---
@@ -17,7 +20,7 @@ MODEL_PATH = config.PATHS[ACTIVE_MODE]["model_path"]
 
 IMG_HEIGHT, IMG_WIDTH = 120, 160
 
-# アクションの定義
+# アクションの定義 (Definition of Actions)
 ACTIONS = ["STOP", "UP", "DOWN", "LEFT", "RIGHT"]
 NUM_CLASSES = len(ACTIONS)
 
@@ -29,6 +32,7 @@ def action_to_id(action_str):
 def load_data():
     """
     CSVから画像パスとアクションラベル(文字列)を読み込み、前処理を行う。
+    (Load image paths and action strings from CSV, and perform pre-processing.)
     """
     images = []
     labels = []
@@ -68,6 +72,8 @@ def build_classification_model():
     """
     5分類を出力するためのモデル (Classification Model) を構築する。
     教育目的のために構造は非常にシンプルに保つ。
+    (Build a classification model to output 5 classes. 
+    The structure is kept very simple for educational purposes.)
     """
     model = Sequential([
         Input(shape=(IMG_HEIGHT, IMG_WIDTH, 3)),

@@ -54,10 +54,12 @@ class AutonomousDriver:
                         img_tensor = np.expand_dims(img, axis=0).astype(np.float32) / 255.0
                         
                         # 2. モード別推論 (Mode-Specific Inference)
+                        t_start = time.time()
                         prediction = self.model.predict(img_tensor, verbose=0)[0]
+                        infer_ms = (time.time() - t_start) * 1000
                         
                         if ACTIVE_MODE == "EDUCATION":
-                            # 教育モード: 5分類 (Softmax)
+                            # 教育モード: 5分類 (Education Mode: 5-class Classification)
                             action_idx = np.argmax(prediction)
                             action = ACTIONS[action_idx]
                             
@@ -65,10 +67,10 @@ class AutonomousDriver:
                                 self.car.stop()
                             else:
                                 self.car.move(action)
-                            print(f"[AI {ACTIVE_MODE}] 予測アクション: {action} (確信度: {prediction[action_idx]:.2f})")
+                            print(f"[AI {ACTIVE_MODE}] 予測アクション: {action} (確信度: {prediction[action_idx]:.2f}) | 推論: {infer_ms:.1f}ms")
                             
                         else:
-                            # 研究モード: 連続回帰 (Tanh)
+                            # 研究モード: 連続回帰 (Research Mode: Continuous Regression)
                             pred_left = prediction[0]
                             pred_right = prediction[1]
                             
@@ -81,10 +83,10 @@ class AutonomousDriver:
                             self.car.target_l = target_l
                             self.car.target_r = target_right
                             
-                            print(f"[AI {ACTIVE_MODE}] Target L: {target_l:>3}%, R: {target_right:>3}%")
+                            print(f"[AI {ACTIVE_MODE}] Target L: {target_l:>3}%, R: {target_right:>3}% | 推論: {infer_ms:.1f}ms")
                         
         except KeyboardInterrupt:
-            print("\nユーザーによって停止されました。")
+            print("\nユーザーによって停止されました。 (Stopped by user.)")
         except Exception as e:
             print(f"Error: {e}")
         finally:
