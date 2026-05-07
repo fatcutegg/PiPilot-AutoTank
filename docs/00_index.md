@@ -2,7 +2,7 @@
 Notion_Page_ID: 3590fc46777e80cea840f8f9b4833418
 ---
 
-# 🚀 自動運転タンク・マスターガイド（目次）
+# 🚀 PiPilot-AutoTank: 自動運転タンク・マスターガイド
 
 ようこそ、未来のAIエンジニアへ！
 
@@ -17,4 +17,4 @@ Notion_Page_ID: 3590fc46777e80cea840f8f9b4833418
 ## プロジェクトリポジトリ (Project Repository)
 
 最新のソースコードは以下のGitHubリポジトリで管理されています：
-[fatcutegg/tank_project](https://github.com/fatcutegg/tank_project)
+[fatcutegg/PiPilot-AutoTank](https://github.com/fatcutegg/PiPilot-AutoTank)
