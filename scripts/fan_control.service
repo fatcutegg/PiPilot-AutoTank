@@ -5,8 +5,8 @@ After=multi-user.target
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/home/pi4mb/tank_project/scripts
-ExecStart=/usr/bin/python3 /home/pi4mb/tank_project/scripts/fan_daemon.py
+WorkingDirectory=/home/pi4mb/PiPilot-AutoTank/scripts
+ExecStart=/usr/bin/python3 /home/pi4mb/PiPilot-AutoTank/scripts/fan_daemon.py
 Restart=always
 RestartSec=5
 
