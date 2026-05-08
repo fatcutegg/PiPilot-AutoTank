@@ -7,35 +7,34 @@ from dotenv import load_dotenv
 from notion_client import Client
 
 def parse_rich_text(text):
-    """Parses text for markdown links [text](url) and returns a list of Notion rich_text objects."""
+    """Parses markdown inline styles (bold, italic, inline code, links) into Notion rich_text objects."""
+    # Tokenize: split by **bold**, *italic*, `code`, [link](url)
+    token_re = re.compile(
+        r'(\*\*(.+?)\*\*)'      # bold
+        r'|(\*(.+?)\*)'          # italic
+        r'|(`(.+?)`)'            # inline code
+        r'|(\[([^\]]+)\]\(([^)]+)\))'  # link
+    )
     parts = []
-    # Regex to find [text](url)
-    pattern = r'\[([^\]]+)\]\(([^)]+)\)'
     last_end = 0
-    for match in re.finditer(pattern, text):
-        # Add plain text before the link
-        if match.start() > last_end:
-            parts.append({
-                "type": "text",
-                "text": {"content": text[last_end:match.start()]}
-            })
-        # Add the link
-        parts.append({
-            "type": "text",
-            "text": {
-                "content": match.group(1),
-                "link": {"url": match.group(2)}
-            }
-        })
-        last_end = match.end()
-    
-    # Add remaining plain text
+    for m in token_re.finditer(text):
+        if m.start() > last_end:
+            parts.append({"type": "text", "text": {"content": text[last_end:m.start()]}})
+        if m.group(1):   # **bold**
+            parts.append({"type": "text", "text": {"content": m.group(2)},
+                          "annotations": {"bold": True}})
+        elif m.group(3): # *italic*
+            parts.append({"type": "text", "text": {"content": m.group(4)},
+                          "annotations": {"italic": True}})
+        elif m.group(5): # `code`
+            parts.append({"type": "text", "text": {"content": m.group(6)},
+                          "annotations": {"code": True}})
+        elif m.group(7): # [text](url)
+            parts.append({"type": "text",
+                          "text": {"content": m.group(8), "link": {"url": m.group(9)}}})
+        last_end = m.end()
     if last_end < len(text):
-        parts.append({
-            "type": "text",
-            "text": {"content": text[last_end:]}
-        })
-    
+        parts.append({"type": "text", "text": {"content": text[last_end:]}})
     if not parts:
         return [{"type": "text", "text": {"content": text}}]
     return parts
@@ -66,94 +65,90 @@ def parse_frontmatter(md_content):
         return {}, md_content
 
 def markdown_to_notion_blocks(markdown_text):
-    """Converts a simple markdown string to Notion block format."""
     blocks = []
     lines = markdown_text.split('\n')
-    in_code_block = False
-    code_content = []
-    code_language = "plain text"
-
-    for line in lines:
-        if line.startswith("```"):
-            if in_code_block:
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        if not line:
+            i += 1
+            continue
+        if line.startswith("|"):
+            rows = []
+            while i < len(lines) and lines[i].strip().startswith("|"):
+                row_str = lines[i].strip()
+                cells = [c.strip() for c in row_str.split('|') if c.strip()]
+                rows.append(cells)
+                i += 1
+            # Filter out separator rows (e.g. |---|---|)
+            data_rows = [r for r in rows if not all(re.match(r'^[-:]+$', c) for c in r)]
+            if data_rows:
+                table_width = len(data_rows[0])
+                notion_rows = []
+                for row in data_rows:
+                    cells = row[:table_width]
+                    while len(cells) < table_width:
+                        cells.append("")
+                    notion_rows.append({
+                        "object": "block",
+                        "type": "table_row",
+                        "table_row": {"cells": [parse_rich_text(cell) for cell in cells]}
+                    })
+                # Notion API requires children inside the table property
                 blocks.append({
                     "object": "block",
-                    "type": "code",
-                    "code": {
-                        "rich_text": [{"type": "text", "text": {"content": "\n".join(code_content)}}],
-                        "language": code_language
+                    "type": "table",
+                    "table": {
+                        "table_width": table_width,
+                        "has_column_header": True,
+                        "has_row_header": False,
+                        "children": notion_rows
                     }
                 })
-                in_code_block = False
-                code_content = []
-            else:
-                in_code_block = True
-                lang = line[3:].strip()
-                if lang == "bash":
-                    code_language = "shell"
-                elif lang == "python":
-                    code_language = "python"
-                else:
-                    code_language = "plain text"
             continue
-            
-        if in_code_block:
-            code_content.append(line)
+        if line.startswith("```"):
+            code_content = []
+            lang = line[3:].strip()
+            i += 1
+            while i < len(lines) and not lines[i].startswith("```"):
+                code_content.append(lines[i])
+                i += 1
+            blocks.append({
+                "object": "block",
+                "type": "code",
+                "code": {
+                    "rich_text": [{"type": "text", "text": {"content": "\n".join(code_content)}}],
+                    "language": "python" if lang == "python" else ("shell" if lang == "bash" else "plain text")
+                }
+            })
+            i += 1
             continue
-            
-        line_stripped = line.strip()
-        if not line_stripped:
-            continue
-            
-        if line_stripped.startswith("---"):
-            blocks.append({
-                "object": "block",
-                "type": "divider",
-                "divider": {}
-            })
-        elif line_stripped.startswith("# "):
-            blocks.append({
-                "object": "block",
-                "type": "heading_1",
-                "heading_1": {"rich_text": parse_rich_text(line_stripped[2:])}
-            })
-        elif line_stripped.startswith("## "):
-            blocks.append({
-                "object": "block",
-                "type": "heading_2",
-                "heading_2": {"rich_text": parse_rich_text(line_stripped[3:])}
-            })
-        elif line_stripped.startswith("### "):
-            blocks.append({
-                "object": "block",
-                "type": "heading_3",
-                "heading_3": {"rich_text": parse_rich_text(line_stripped[4:])}
-            })
-        elif line_stripped.startswith("- "):
-            blocks.append({
-                "object": "block",
-                "type": "bulleted_list_item",
-                "bulleted_list_item": {"rich_text": parse_rich_text(line_stripped[2:])}
-            })
-        elif line_stripped[0].isdigit() and line_stripped[1:3] == ". ":
-            blocks.append({
-                "object": "block",
-                "type": "numbered_list_item",
-                "numbered_list_item": {"rich_text": parse_rich_text(line_stripped[3:])}
-            })
-        elif line_stripped.startswith("![") and "]" in line_stripped and "(" in line_stripped:
-            blocks.append({
-                "object": "block",
-                "type": "paragraph",
-                "paragraph": {"rich_text": [{"type": "text", "text": {"content": f"📷 [画像プレースホルダー (Notionで手動アップロードしてください)]: {line_stripped}"}}]}
-            })
+        if line.startswith("---"):
+            blocks.append({"object": "block", "type": "divider", "divider": {}})
+        elif line.startswith("# "):
+            blocks.append({"object": "block", "type": "heading_1", "heading_1": {"rich_text": parse_rich_text(line[2:])}})
+        elif line.startswith("## "):
+            blocks.append({"object": "block", "type": "heading_2", "heading_2": {"rich_text": parse_rich_text(line[3:])}})
+        elif line.startswith("### "):
+            blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": parse_rich_text(line[4:])}})
+        elif line.startswith("> "):
+            blocks.append({"object": "block", "type": "quote",
+                           "quote": {"rich_text": parse_rich_text(line[2:])}})
+        elif line.startswith("- [ ] ") or line.startswith("- [x] "):
+            checked = line.startswith("- [x] ")
+            content = line[6:]
+            blocks.append({"object": "block", "type": "to_do",
+                           "to_do": {"rich_text": parse_rich_text(content), "checked": checked}})
+        elif line.startswith("- "):
+            blocks.append({"object": "block", "type": "bulleted_list_item",
+                           "bulleted_list_item": {"rich_text": parse_rich_text(line[2:])}})
+        elif line[0].isdigit() and line[1:3] == ". ":
+            blocks.append({"object": "block", "type": "numbered_list_item",
+                           "numbered_list_item": {"rich_text": parse_rich_text(line[3:])}})
         else:
-            blocks.append({
-                "object": "block",
-                "type": "paragraph",
-                "paragraph": {"rich_text": parse_rich_text(line_stripped)}
-            })
-            
+            blocks.append({"object": "block", "type": "paragraph",
+                           "paragraph": {"rich_text": parse_rich_text(line)}})
+        i += 1
     return blocks
 
 def blocks_to_markdown(blocks):
@@ -291,12 +286,12 @@ def push_to_notion(file_path, client):
     # 2. Convert and Upload
     print("Parsing Markdown to Notion Blocks...")
     blocks = markdown_to_notion_blocks(md_content)
-    
+
     print(f"Uploading {len(blocks)} blocks...")
     for i in range(0, len(blocks), 100):
         batch = blocks[i:i+100]
         client.blocks.children.append(block_id=page_id, children=batch)
-        
+
     print("✅ Push complete!")
 
 def pull_from_notion(file_path, client):
