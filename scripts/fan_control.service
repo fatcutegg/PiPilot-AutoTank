@@ -6,7 +6,7 @@ After=multi-user.target
 Type=simple
 User=root
 WorkingDirectory=/home/pi4mb/PiPilot-AutoTank/scripts
-ExecStart=/usr/bin/python3 /home/pi4mb/PiPilot-AutoTank/scripts/fan_daemon.py
+ExecStart=/home/pi4mb/miniconda3/envs/tank_py39/bin/python /home/pi4mb/PiPilot-AutoTank/scripts/fan_daemon.py
 Restart=always
 RestartSec=5
 
