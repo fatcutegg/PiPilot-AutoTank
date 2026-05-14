@@ -27,8 +27,8 @@ class TankController:
             self.pwms.append(p)
             
         # --- 動力制御パラメータ (Power Control Parameters) ---
-        self.max_power = 85      # 最大出力 (Maximum target power)
-        self.min_power = 40      # 起動トルク用の最小出力 (Minimum power to overcome deadzone)
+        self.max_power = 100      # 最大出力 (Maximum target power)
+        self.min_power = 50      # 起動トルク用の最小出力 (Minimum power to overcome deadzone)
         self.ramp_step = 5       # 1tickあたりの占空比増加量 (PWM change per tick)
         self.tick_rate = 0.05    # 更新頻度 (秒) (Update frequency: 20Hz)
         
@@ -121,11 +121,11 @@ class TankController:
             self.target_l = -self.max_power
             self.target_r = -self.max_power
         elif direction == "LEFT":
-            self.target_l = -self.max_power
-            self.target_r = self.max_power
-        elif direction == "RIGHT":
             self.target_l = self.max_power
             self.target_r = -self.max_power
+        elif direction == "RIGHT":
+            self.target_l = -self.max_power
+            self.target_r = self.max_power
 
     def stop(self):
         """全てのモーターの目標動力を0に設定し、平滑に停止させる"""
