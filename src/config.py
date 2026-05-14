@@ -5,7 +5,7 @@
 # "EDUCATION" : 中学生向け。5分類モデル（UP, DOWN, LEFT, RIGHT, STOP）。直感的でわかりやすい。
 # "RESEARCH"  : 研究向け。連続空間回帰モデル（Continuous Regression / Transformer）。滑らかな自動運転用。
 
-ACTIVE_MODE = "EDUCATION"  # デフォルトは教育モード
+ACTIVE_MODE = "RESEARCH"  # 研究モードに切り替え
 
 # 各モードに対応する保存先・モデルのパス
 PATHS = {

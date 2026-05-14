@@ -43,6 +43,7 @@ desktop.ini
 
 # --- AI/Research Specific (Large Data & Logs) ---
 # Exclude large datasets to keep git lightweight
+dataset/
 data/
 datasets/
 *.csv

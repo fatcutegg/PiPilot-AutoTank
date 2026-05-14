@@ -26,25 +26,24 @@ class DataLogger:
         self.recording = False
         self.running = True
         self.frame_count = 0
-        self.current_action = "STOP" # EDUCATIONモード用
+        self.current_action = "STOP"
         
-        # ログファイルの初期化
+        # ログファイルの初期化 (Unified Format: path, action, left_pwm, right_pwm)
         file_exists = os.path.isfile(LOG_FILE)
         self.csv_file = open(LOG_FILE, 'a', newline='')
         self.writer = csv.writer(self.csv_file)
         
         if not file_exists:
-            if ACTIVE_MODE == "EDUCATION":
-                self.writer.writerow(['image_path', 'action_label'])
-            else:
-                self.writer.writerow(['image_path', 'left_pwm', 'right_pwm'])
+            # モードに関わらずフルデータを保存するヘッダー
+            self.writer.writerow(['image_path', 'action', 'left_pwm', 'right_pwm'])
             
-        print(f"=== 双軌制 データロガー (Dual-Mode Data Logger) ===")
-        print(f"現在のモード: {ACTIVE_MODE}")
+        print(f"=== 統一データロガー (Unified Data Logger) ===")
+        print(f"保存先: {DATA_DIR}")
+        print("録画中、アクションとPWM値の両方を同時に記録します。")
         print("準備完了: 'r'キーで録画開始/停止, 'q'キーで終了します。")
 
     def camera_loop(self):
-        """rpicam-vid (libcamera) を使用して、メモリ上でMJPEGストリームを高速に読み取る。"""
+        """rpicam-vid を使用して画像をキャプチャし、録画中なら保存する。"""
         cmd = [
             "rpicam-vid", "-t", "0", "--codec", "mjpeg", 
             "--width", "160", "--height", "120", 
@@ -61,7 +60,6 @@ class DataLogger:
                     continue
                     
                 bytes_buffer += chunk
-                
                 a = bytes_buffer.find(b'\xff\xd8')
                 b = bytes_buffer.find(b'\xff\xd9')
                 
@@ -81,7 +79,7 @@ class DataLogger:
             self.csv_file.close()
 
     def save_data(self, frame):
-        """画像とモードに応じたラベル（カテゴリ or PWM）をペアとして保存する"""
+        """画像、アクション名、PWM値（L/R）をすべて保存する"""
         timestamp = time.time()
         filename = f"img_{timestamp:.3f}.jpg"
         filepath = os.path.join(IMG_DIR, filename)
@@ -89,24 +87,18 @@ class DataLogger:
         # 1. 画像の保存
         cv2.imwrite(filepath, frame)
         
-        # パスは相対パスで記録
+        # 2. データの記録 (Unified Format)
         rel_path = os.path.join("images", filename)
+        action = self.current_action
+        l_pwm = self.car.current_l
+        r_pwm = self.car.current_r
         
-        # 2. モードに基づくCSVへの記録
-        if ACTIVE_MODE == "EDUCATION":
-            self.writer.writerow([rel_path, self.current_action])
-            log_msg = f"Action: {self.current_action}"
-        else:
-            current_l = self.car.current_l
-            current_r = self.car.current_r
-            self.writer.writerow([rel_path, current_l, current_r])
-            log_msg = f"PWM: L={current_l}%, R={current_r}%"
-            
-        self.csv_file.flush() # データの即時書き込みを保証
+        self.writer.writerow([rel_path, action, l_pwm, r_pwm])
+        self.csv_file.flush()
         
         self.frame_count += 1
         if self.frame_count % 10 == 0:
-            print(f"[Recording] 記録済みフレーム: {self.frame_count} ({log_msg})")
+            print(f"[REC] {self.frame_count} frames | Action: {action:<5} | PWM: L={l_pwm:>3}, R={r_pwm:>3}")
 
     def toggle_recording(self):
         self.recording = not self.recording
@@ -120,7 +112,6 @@ if __name__ == "__main__":
     car = TankController()
     logger = DataLogger(car)
     
-    # カメラスレッドの起動
     cam_thread = threading.Thread(target=logger.camera_loop, daemon=True)
     cam_thread.start()
 

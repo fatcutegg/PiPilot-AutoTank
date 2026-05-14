@@ -4,167 +4,170 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Conv2D, Flatten, Dense, Dropout, Input, BatchNormalization
-from tensorflow.keras.layers import RandomBrightness, RandomContrast
 from tensorflow.keras.optimizers import Adam
 from sklearn.model_selection import train_test_split
+import sys
+import random
+
+# プロジェクトのルートディレクトリをパスに追加
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
+import config
 
 # --- 設定 (Settings) ---
-DATA_DIR = "dataset"
-LOG_FILE = os.path.join(DATA_DIR, "driving_log.csv")
-MODEL_DIR = "models"
-os.makedirs(MODEL_DIR, exist_ok=True)
+ACTIVE_MODE = config.ACTIVE_MODE
+RES_DATA_DIR = config.PATHS["RESEARCH"]["dataset_dir"]
+RES_LOG_FILE = config.PATHS["RESEARCH"]["log_file"]
+EDU_DATA_DIR = config.PATHS["EDUCATION"]["dataset_dir"]
+EDU_LOG_FILE = config.PATHS["EDUCATION"]["log_file"]
 
-# 画像のリサイズ先 (NVIDIA PilotNetに近い比率を保つ)
+MODEL_PATH = config.PATHS["RESEARCH"]["model_path"]
+
 IMG_HEIGHT, IMG_WIDTH = 120, 160
 BATCH_SIZE = 32
 
-def parse_csv():
+def parse_data():
     """
-    CSVから画像パスとPWM値(Labels)をリストとして読み込む。
-    (Read image paths and PWM values from CSV as lists.)
+    統一フォーマット (path, action, left_pwm, right_pwm) からデータを読み込む。
+    PWM値が記録されている場合はそれを使用し、なければaction名からマッピングする。
     """
     image_paths = []
     labels = []
     
-    if not os.path.isfile(LOG_FILE):
-        print(f"Error: {LOG_FILE} が見つかりません。先にPiでデータ収集を行ってください。")
+    # 読み込むログファイルの決定
+    if os.path.isfile(RES_LOG_FILE):
+        log_file = RES_LOG_FILE
+        data_dir = RES_DATA_DIR
+    elif os.path.isfile(EDU_LOG_FILE):
+        log_file = EDU_LOG_FILE
+        data_dir = EDU_DATA_DIR
+    else:
+        print("Error: ログファイルが見つかりません。")
         return None, None
 
-    print("=== データのパスを読み込み開始 (Loading Data Paths) ===")
-    with open(LOG_FILE, 'r') as f:
+    print(f"=== {log_file} を読み込み中 ===")
+
+    # 1. データの読み込み
+    all_rows = []
+    header = []
+    with open(log_file, 'r') as f:
         reader = csv.reader(f)
-        next(reader) # ヘッダーをスキップ
+        header = next(reader)
         for row in reader:
-            if len(row) < 3:
-                continue
-                
-            img_path = os.path.join(DATA_DIR, row[0])
-            if not os.path.exists(img_path):
-                continue
-                
-            left_pwm = float(row[1])
-            right_pwm = float(row[2])
+            if len(row) >= 2:
+                all_rows.append(row)
+
+    # 列インデックスの特定
+    try:
+        path_idx = header.index('image_path')
+        action_idx = header.index('action')
+        # PWM値があるか確認
+        l_idx = header.index('left_pwm')
+        r_idx = header.index('right_pwm')
+        has_real_pwm = True
+    except ValueError:
+        path_idx = 0
+        action_idx = 1
+        has_real_pwm = False
+
+    # 2. クラスごとの分類 (平衡化のためaction名を使用)
+    data_by_action = {}
+    for row in all_rows:
+        action = row[action_idx]
+        if action not in data_by_action:
+            data_by_action[action] = []
+        data_by_action[action].append(row)
+
+    # 3. 動的バランシング
+    if "STOP" in data_by_action:
+        other_counts = [len(v) for k, v in data_by_action.items() if k != "STOP"]
+        max_other = max(other_counts) if other_counts else 0
+        stop_limit = int(max_other * 1.5)
+        
+        print(f"--- データバランスの動的調整 (Dynamic Balancing) ---")
+        balanced_rows = []
+        for action, rows in data_by_action.items():
+            if action == "STOP" and len(rows) > stop_limit:
+                sampled = random.sample(rows, stop_limit)
+                balanced_rows.extend(sampled)
+            else:
+                balanced_rows.extend(rows)
+    else:
+        balanced_rows = all_rows
+
+    # 4. PWM値への変換
+    EDU_PWM_MAP = {
+        "STOP":  [0.0, 0.0],
+        "UP":    [0.85, 0.85],
+        "DOWN":  [-0.85, -0.85],
+        "LEFT":  [-0.85, 0.85],
+        "RIGHT": [0.85, -0.85]
+    }
+
+    for row in balanced_rows:
+        img_p = row[path_idx]
+        img_full_path = os.path.join(data_dir, img_p)
+        if not os.path.exists(img_full_path):
+            continue
             
-            # ニューラルネットワークのために、PWMを [-1.0, 1.0] に正規化する
-            left_label = left_pwm / 100.0
-            right_label = right_pwm / 100.0
+        if has_real_pwm:
+            # 実際のPWM値が記録されている場合はそれを使用
+            pwm = [float(row[l_idx]) / 100.0, float(row[r_idx]) / 100.0]
+        else:
+            # アクション名からマッピング
+            pwm = EDU_PWM_MAP.get(row[action_idx], [0.0, 0.0])
             
-            image_paths.append(img_path)
-            labels.append([left_label, right_label])
+        image_paths.append(img_full_path)
+        labels.append(pwm)
 
     print(f"合計 {len(image_paths)} 件のデータを読み込みました。")
     return image_paths, labels
 
 def process_path(file_path, label):
-    """
-    ファイルパスから画像を読み込み、前処理を行う関数。
-    tf.data.Dataset.map で使用される。
-    (Load image from file path and perform pre-processing. Used in tf.data.Dataset.map.)
-    """
-    # ファイルを読み込む
     img = tf.io.read_file(file_path)
-    # JPEGとしてデコードし、RGBチャンネルを持つテンソルに変換
     img = tf.image.decode_jpeg(img, channels=3)
-    # 160x120 にリサイズ
     img = tf.image.resize(img, [IMG_HEIGHT, IMG_WIDTH])
-    # 正規化 (0.0~1.0)
     img = img / 255.0
     return img, label
 
 def create_dataset(image_paths, labels, batch_size=BATCH_SIZE, shuffle=True):
-    """
-    効率的なデータローダー (tf.data.Dataset) を作成する。
-    (Create an efficient data loader using tf.data.Dataset.)
-    """
     ds = tf.data.Dataset.from_tensor_slices((image_paths, labels))
     if shuffle:
         ds = ds.shuffle(buffer_size=len(image_paths))
-    
-    # 並列処理で画像を読み込み
     ds = ds.map(process_path, num_parallel_calls=tf.data.AUTOTUNE)
     ds = ds.batch(batch_size)
     ds = ds.prefetch(tf.data.AUTOTUNE)
     return ds
 
 def build_regression_model():
-    """
-    連続的なPWMを出力するための回帰モデル (Regression Model) を構築する。
-    データ拡張(Data Augmentation)とBatchNormalizationを組み込み、ロバスト性を向上。
-    (Build a regression model to output continuous PWM.
-    Incorporates Data Augmentation and BatchNormalization for improved robustness.)
-    """
     model = Sequential([
         Input(shape=(IMG_HEIGHT, IMG_WIDTH, 3)),
-        
-        # データ拡張層 (Data Augmentation Layers)
-        # ランダムな明るさとコントラストの変更で環境光の変化に強くする
-        RandomBrightness(factor=0.2),
-        RandomContrast(factor=0.2),
-        
-        # 特徴抽出 (Feature Extraction)
-        Conv2D(24, (5, 5), strides=(2, 2), padding="same", use_bias=False),
+        Conv2D(24, (5, 5), strides=(2, 2), activation='relu'),
         BatchNormalization(),
-        tf.keras.layers.Activation('relu'),
-        
-        Conv2D(36, (5, 5), strides=(2, 2), padding="same", use_bias=False),
+        Conv2D(36, (5, 5), strides=(2, 2), activation='relu'),
         BatchNormalization(),
-        tf.keras.layers.Activation('relu'),
-        
-        Conv2D(48, (5, 5), strides=(2, 2), padding="same", use_bias=False),
+        Conv2D(48, (5, 5), strides=(2, 2), activation='relu'),
         BatchNormalization(),
-        tf.keras.layers.Activation('relu'),
-        
-        Conv2D(64, (3, 3), padding="valid", use_bias=False),
-        BatchNormalization(),
-        tf.keras.layers.Activation('relu'),
-        
-        Conv2D(64, (3, 3), padding="valid", use_bias=False),
-        BatchNormalization(),
-        tf.keras.layers.Activation('relu'),
-        
+        Conv2D(64, (3, 3), activation='relu'),
+        Conv2D(64, (3, 3), activation='relu'),
         Flatten(),
-        
-        # 回帰のための全結合層 (Fully Connected Layers)
         Dense(100, activation='relu'),
-        Dropout(0.3), # 過学習防止
+        Dropout(0.3),
         Dense(50, activation='relu'),
-        Dropout(0.2),
         Dense(10, activation='relu'),
-        
-        # 出力層: 2ノード (左PWM, 右PWM), tanhで -1.0 ~ 1.0 に収める
         Dense(2, activation='tanh')
     ])
-    
-    # 損失関数は Mean Squared Error (MSE) を使用する
     model.compile(optimizer=Adam(learning_rate=0.001), loss='mse', metrics=['mae'])
     return model
 
 if __name__ == "__main__":
-    image_paths, labels = parse_csv()
+    image_paths, labels = parse_data()
     if image_paths is None or len(image_paths) == 0:
-        print("Error: No data found.")
         exit(1)
-        
-    # 学習用と検証用に分割 (80% Train, 20% Validation)
-    train_paths, val_paths, train_labels, val_labels = train_test_split(
-        image_paths, labels, test_size=0.2, random_state=42
-    )
-    
+    train_paths, val_paths, train_labels, val_labels = train_test_split(image_paths, labels, test_size=0.2, random_state=42)
     train_dataset = create_dataset(train_paths, train_labels, shuffle=True)
     val_dataset = create_dataset(val_paths, val_labels, shuffle=False)
-    
-    print("\n=== モデルの構築 (Building Model) ===")
     model = build_regression_model()
-    model.summary()
-    
-    print("\n=== 学習開始 (Training) ===")
-    history = model.fit(
-        train_dataset,
-        validation_data=val_dataset,
-        epochs=30,
-    )
-    
-    model_save_path = os.path.join(MODEL_DIR, "end2end_tank.h5")
-    model.save(model_save_path)
-    print(f"\n✅ 最適化されたモデルの保存が完了しました: {model_save_path}")
-    print("このモデルを樹莓派にRsyncし、autonomous_drive.pyで推論させます。")
+    model.fit(train_dataset, validation_data=val_dataset, epochs=30)
+    os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
+    model.save(MODEL_PATH, save_format='h5')
+    print(f"\n✅ 研究用回帰モデルの保存が完了しました: {MODEL_PATH}")
