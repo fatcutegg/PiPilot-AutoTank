@@ -34,10 +34,7 @@ class DataLogger:
         self.writer = csv.writer(self.csv_file)
         
         if not file_exists:
-            if ACTIVE_MODE == "EDUCATION":
-                self.writer.writerow(['image_path', 'action_label'])
-            else:
-                self.writer.writerow(['image_path', 'left_pwm', 'right_pwm'])
+            self.writer.writerow(['image_path', 'action_label', 'left_pwm', 'right_pwm'])
             
         print(f"=== 双軌制 データロガー (Dual-Mode Data Logger) ===")
         print(f"現在のモード: {ACTIVE_MODE}")
@@ -92,15 +89,12 @@ class DataLogger:
         # パスは相対パスで記録
         rel_path = os.path.join("images", filename)
         
-        # 2. モードに基づくCSVへの記録
-        if ACTIVE_MODE == "EDUCATION":
-            self.writer.writerow([rel_path, self.current_action])
-            log_msg = f"Action: {self.current_action}"
-        else:
-            current_l = self.car.current_l
-            current_r = self.car.current_r
-            self.writer.writerow([rel_path, current_l, current_r])
-            log_msg = f"PWM: L={current_l}%, R={current_r}%"
+        # 2. 全てのフィールドを記録 (教育用ラベル + 研究用PWM)
+        current_l = self.car.current_l
+        current_r = self.car.current_r
+        
+        self.writer.writerow([rel_path, self.current_action, current_l, current_r])
+        log_msg = f"Action: {self.current_action}, PWM: L={current_l}%, R={current_r}%"
             
         self.csv_file.flush() # データの即時書き込みを保証
         
