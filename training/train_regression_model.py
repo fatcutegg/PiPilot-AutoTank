@@ -8,11 +8,15 @@ from tensorflow.keras.layers import RandomBrightness, RandomContrast
 from tensorflow.keras.optimizers import Adam
 from sklearn.model_selection import train_test_split
 
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
+import config
+
 # --- 設定 (Settings) ---
-DATA_DIR = "dataset"
-LOG_FILE = os.path.join(DATA_DIR, "driving_log.csv")
-MODEL_DIR = "models"
-os.makedirs(MODEL_DIR, exist_ok=True)
+ACTIVE_MODE = "RESEARCH"
+DATA_DIR = config.PATHS[ACTIVE_MODE]["dataset_dir"]
+LOG_FILE = config.PATHS[ACTIVE_MODE]["log_file"]
+MODEL_PATH = config.PATHS[ACTIVE_MODE]["model_path"]
 
 # 画像のリサイズ先 (NVIDIA PilotNetに近い比率を保つ)
 IMG_HEIGHT, IMG_WIDTH = 120, 160
@@ -30,20 +34,22 @@ def parse_csv():
         print(f"Error: {LOG_FILE} が見つかりません。先にPiでデータ収集を行ってください。")
         return None, None
 
-    print("=== データのパスを読み込み開始 (Loading Data Paths) ===")
+    print(f"=== {ACTIVE_MODE} データのパスを読み込み開始 ===")
     with open(LOG_FILE, 'r') as f:
         reader = csv.reader(f)
         next(reader) # ヘッダーをスキップ
         for row in reader:
-            if len(row) < 3:
+            # 新フォーマット: [image_path, action_label, left_pwm, right_pwm]
+            if len(row) < 4:
                 continue
                 
-            img_path = os.path.join(DATA_DIR, row[0])
+            img_path = os.path.join(DATA_DIR, row[0]) 
             if not os.path.exists(img_path):
+                # print(f"Warning: {img_path} not found")
                 continue
                 
-            left_pwm = float(row[1])
-            right_pwm = float(row[2])
+            left_pwm = float(row[2])
+            right_pwm = float(row[3])
             
             # ニューラルネットワークのために、PWMを [-1.0, 1.0] に正規化する
             left_label = left_pwm / 100.0
@@ -94,15 +100,9 @@ def build_regression_model():
     Incorporates Data Augmentation and BatchNormalization for improved robustness.)
     """
     model = Sequential([
-        Input(shape=(IMG_HEIGHT, IMG_WIDTH, 3)),
-        
-        # データ拡張層 (Data Augmentation Layers)
-        # ランダムな明るさとコントラストの変更で環境光の変化に強くする
-        RandomBrightness(factor=0.2),
-        RandomContrast(factor=0.2),
-        
         # 特徴抽出 (Feature Extraction)
-        Conv2D(24, (5, 5), strides=(2, 2), padding="same", use_bias=False),
+        # 第一層に input_shape を直接指定することで、古いKerasとの互換性を保つ
+        Conv2D(24, (5, 5), strides=(2, 2), padding="same", use_bias=False, input_shape=(IMG_HEIGHT, IMG_WIDTH, 3)),
         BatchNormalization(),
         tf.keras.layers.Activation('relu'),
         
@@ -164,7 +164,7 @@ if __name__ == "__main__":
         epochs=30,
     )
     
-    model_save_path = os.path.join(MODEL_DIR, "end2end_tank.h5")
-    model.save(model_save_path)
-    print(f"\n✅ 最適化されたモデルの保存が完了しました: {model_save_path}")
+    os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
+    model.save(MODEL_PATH)
+    print(f"\n✅ 最適化されたモデルの保存が完了しました: {MODEL_PATH}")
     print("このモデルを樹莓派にRsyncし、autonomous_drive.pyで推論させます。")
