@@ -17,6 +17,6 @@ PATHS = {
     "RESEARCH": {
         "dataset_dir": "dataset/research",
         "log_file": "dataset/research/driving_log.csv",
-        "model_path": "models/end2end_tank.keras"
+        "model_path": "models/end2end_tank.h5"
     }
 }

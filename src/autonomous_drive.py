@@ -4,8 +4,8 @@ import numpy as np
 import subprocess
 import os
 import sys
-from tensorflow.keras.models import load_model
 from teleop_keyboard import TankController
+from model_factory import load_robust_model
 import config
 
 # --- 設定 (Settings) ---
@@ -102,7 +102,7 @@ if __name__ == "__main__":
         
     print("AIモデルを読み込んでいます... (Loading Model...)")
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
-    model = load_model(MODEL_PATH, compile=False)
+    model = load_robust_model(MODEL_PATH)
     
     car = TankController()
     driver = AutonomousDriver(car, model)

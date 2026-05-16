@@ -2,14 +2,18 @@ import os
 import csv
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Conv2D, Flatten, Dense, Dropout, Input, BatchNormalization
-from tensorflow.keras.layers import RandomBrightness, RandomContrast
-from tensorflow.keras.optimizers import Adam
+try:
+    import tf_keras as keras
+except ImportError:
+    import tensorflow.keras as keras
+from keras.models import Sequential
+from keras.layers import Conv2D, Flatten, Dense, Dropout, Input, BatchNormalization, Activation
+from keras.layers import RandomBrightness, RandomContrast
+from keras.optimizers import Adam
 from sklearn.model_selection import train_test_split
-
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
+from model_factory import build_regression_model
 import config
 
 # --- 設定 (Settings) ---
@@ -92,52 +96,6 @@ def create_dataset(image_paths, labels, batch_size=BATCH_SIZE, shuffle=True):
     ds = ds.prefetch(tf.data.AUTOTUNE)
     return ds
 
-def build_regression_model():
-    """
-    連続的なPWMを出力するための回帰モデル (Regression Model) を構築する。
-    データ拡張(Data Augmentation)とBatchNormalizationを組み込み、ロバスト性を向上。
-    (Build a regression model to output continuous PWM.
-    Incorporates Data Augmentation and BatchNormalization for improved robustness.)
-    """
-    model = Sequential([
-        # 特徴抽出 (Feature Extraction)
-        # 第一層に input_shape を直接指定することで、古いKerasとの互換性を保つ
-        Conv2D(24, (5, 5), strides=(2, 2), padding="same", use_bias=False, input_shape=(IMG_HEIGHT, IMG_WIDTH, 3)),
-        BatchNormalization(),
-        tf.keras.layers.Activation('relu'),
-        
-        Conv2D(36, (5, 5), strides=(2, 2), padding="same", use_bias=False),
-        BatchNormalization(),
-        tf.keras.layers.Activation('relu'),
-        
-        Conv2D(48, (5, 5), strides=(2, 2), padding="same", use_bias=False),
-        BatchNormalization(),
-        tf.keras.layers.Activation('relu'),
-        
-        Conv2D(64, (3, 3), padding="valid", use_bias=False),
-        BatchNormalization(),
-        tf.keras.layers.Activation('relu'),
-        
-        Conv2D(64, (3, 3), padding="valid", use_bias=False),
-        BatchNormalization(),
-        tf.keras.layers.Activation('relu'),
-        
-        Flatten(),
-        
-        # 回帰のための全結合層 (Fully Connected Layers)
-        Dense(100, activation='relu'),
-        Dropout(0.3), # 過学習防止
-        Dense(50, activation='relu'),
-        Dropout(0.2),
-        Dense(10, activation='relu'),
-        
-        # 出力層: 2ノード (左PWM, 右PWM), tanhで -1.0 ~ 1.0 に収める
-        Dense(2, activation='tanh')
-    ])
-    
-    # 損失関数は Mean Squared Error (MSE) を使用する
-    model.compile(optimizer=Adam(learning_rate=0.001), loss='mse', metrics=['mae'])
-    return model
 
 if __name__ == "__main__":
     image_paths, labels = parse_csv()
@@ -166,5 +124,11 @@ if __name__ == "__main__":
     
     os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
     model.save(MODEL_PATH)
+    
+    # また、互換性のために重みだけを保存する (Also save weights only for compatibility)
+    weights_path = MODEL_PATH.replace(".h5", ".weights.h5")
+    model.save_weights(weights_path)
+    
     print(f"\n✅ 最適化されたモデルの保存が完了しました: {MODEL_PATH}")
-    print("このモデルを樹莓派にRsyncし、autonomous_drive.pyで推論させます。")
+    print(f"✅ 重みファイルの保存が完了しました: {weights_path}")
+    print("このモデル/重みを樹莓派にRsyncし、autonomous_drive.pyで推論させます。")
