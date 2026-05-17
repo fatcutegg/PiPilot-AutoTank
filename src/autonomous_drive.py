@@ -31,22 +31,41 @@ class AutonomousDriver:
         
         try:
             process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+            
+            # Set the pipe to non-blocking to prevent stale/buffered frames
+            import fcntl
+            fd = process.stdout.fileno()
+            fl = fcntl.fcntl(fd, fcntl.F_GETFL)
+            fcntl.fcntl(fd, fcntl.F_SETFL, fl | os.O_NONBLOCK)
+            
             bytes_buffer = b''
+            print("🚀 カメラ映像ストリームを開始しました。")
             
             while self.running:
-                chunk = process.stdout.read(1024)
-                if not chunk:
-                    continue
-                    
-                bytes_buffer += chunk
-                a = bytes_buffer.find(b'\xff\xd8')
-                b = bytes_buffer.find(b'\xff\xd9')
+                # 1. 蓄積されたバッファをすべて読み出す (Read all available buffered data)
+                while True:
+                    try:
+                        chunk = process.stdout.read(8192)
+                        if not chunk:
+                            break
+                        bytes_buffer += chunk
+                    except (IOError, ValueError):
+                        break
                 
-                if a != -1 and b != -1:
-                    jpg = bytes_buffer[a:b+2]
-                    bytes_buffer = bytes_buffer[b+2:]
-                    
-                    frame = cv2.imdecode(np.frombuffer(jpg, dtype=np.uint8), cv2.IMREAD_COLOR)
+                # 2. バッファから「最新の」完全なJPEGフレームを探す (Find the LATEST complete JPEG frame)
+                last_jpg = None
+                while True:
+                    a = bytes_buffer.find(b'\xff\xd8')
+                    b = bytes_buffer.find(b'\xff\xd9')
+                    if a != -1 and b != -1 and a < b:
+                        last_jpg = bytes_buffer[a:b+2]
+                        bytes_buffer = bytes_buffer[b+2:] # 残りのバッファを保持
+                    else:
+                        break
+                
+                # 3. 最新フレームが取得できた場合のみ処理を実行 (Process only if a new frame is available)
+                if last_jpg is not None:
+                    frame = cv2.imdecode(np.frombuffer(last_jpg, dtype=np.uint8), cv2.IMREAD_COLOR)
                     
                     if frame is not None:
                         # 1. 前処理
@@ -67,30 +86,51 @@ class AutonomousDriver:
                                 self.car.stop()
                             else:
                                 self.car.move(action)
-                            print(f"[AI {ACTIVE_MODE}] 予測アクション: {action} (確信度: {prediction[action_idx]:.2f}) | 推論: {infer_ms:.1f}ms")
+                            print(f"[{time.strftime('%H:%M:%S')}] [AI {ACTIVE_MODE}] 予測アクション: {action:<5} (確信度: {prediction[action_idx]:.2f}) | 推論: {infer_ms:.1f}ms")
                             
                         else:
                             # 研究モード: 連続回帰 (Research Mode: Continuous Regression)
                             pred_left = prediction[0]
                             pred_right = prediction[1]
                             
-                            target_l = int(pred_left * 100)
-                            target_right = int(pred_right * 100)
+                            raw_l = int(pred_left * 100)
+                            raw_r = int(pred_right * 100)
                             
+                            # Scale the raw power to overcome the physical deadzone (min_power)
+                            def scale_power(power, min_p, max_p):
+                                if power == 0:
+                                    return 0
+                                sign = 1 if power > 0 else -1
+                                abs_p = min(max(abs(power), 0), 100)
+                                return sign * int(min_p + (abs_p / 100.0) * (max_p - min_p))
+                                
+                            target_l = scale_power(raw_l, self.car.min_power, self.car.max_power)
+                            target_right = scale_power(raw_r, self.car.min_power, self.car.max_power)
+                            
+                            # Final safety bounds clipping
                             target_l = max(min(target_l, self.car.max_power), -self.car.max_power)
                             target_right = max(min(target_right, self.car.max_power), -self.car.max_power)
                             
                             self.car.target_l = target_l
                             self.car.target_r = target_right
                             
-                            print(f"[AI {ACTIVE_MODE}] Target L: {target_l:>3}%, R: {target_right:>3}% | 推論: {infer_ms:.1f}ms")
+                            print(f"[{time.strftime('%H:%M:%S')}] [AI {ACTIVE_MODE}] Target L: {target_l:>3}% (raw: {raw_l:>3}%), R: {target_right:>3}% (raw: {raw_r:>3}%) | 推論: {infer_ms:.1f}ms")
+                        
+                        # 操作間に1秒間のウェイトを導入 (Introduce 1s wait between operations)
+                        time.sleep(1.0)
+                else:
+                    # バッファがまだ溜まっていない場合は少し待機してCPU負荷を下げる
+                    time.sleep(0.05)
                         
         except KeyboardInterrupt:
             print("\nユーザーによって停止されました。 (Stopped by user.)")
         except Exception as e:
             print(f"Error: {e}")
+            import traceback
+            traceback.print_exc()
         finally:
             process.terminate()
+            self.car.stop()
             self.car.cleanup()
             sys.exit(0)
 
