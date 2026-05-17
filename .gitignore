@@ -27,6 +27,8 @@ wheels/
 env/
 venv/
 ENV/
+.conda/
+.conda
 
 # --- VS Code & IDE ---
 .vscode/
