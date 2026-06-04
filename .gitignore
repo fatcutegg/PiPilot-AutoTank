@@ -65,3 +65,7 @@ checkpoints/
 # --- Project Specific ---
 # Add any hardware specific config lock files if necessary
 *.lock
+
+# --- Documents & PDFs ---
+docs_pdf/
+*.pdf
