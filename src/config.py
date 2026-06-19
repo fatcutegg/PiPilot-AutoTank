@@ -1,4 +1,8 @@
 # --- 全局双轨制配置文件 (Global Dual-Mode Configuration) ---
+import os
+
+# プロジェクトのルートディレクトリを取得 (Get project root directory)
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # ACTIVE_MODE を変更することで、データ収集、AI学習、推論のすべての挙動が自動で切り替わります。
 # 利用可能なモード:
@@ -7,16 +11,17 @@
 
 ACTIVE_MODE = "RESEARCH"  # デフォルトは教育モード
 
-# 各モードに対応する保存先・モデルのパス
+# 各モードに対応する保存先・モデルのパス (Paths for each mode)
 PATHS = {
     "EDUCATION": {
-        "dataset_dir": "dataset/education",
-        "log_file": "dataset/education/driving_log.csv",
-        "model_path": "models/edu_model.keras"
+        "dataset_dir": os.path.join(ROOT_DIR, "dataset/education"),
+        "log_file": os.path.join(ROOT_DIR, "dataset/education/driving_log.csv"),
+        "model_path": os.path.join(ROOT_DIR, "models/edu_model.keras")
     },
     "RESEARCH": {
-        "dataset_dir": "dataset/research",
-        "log_file": "dataset/research/driving_log.csv",
-        "model_path": "models/end2end_tank.h5"
+        "dataset_dir": os.path.join(ROOT_DIR, "dataset/research"),
+        "log_file": os.path.join(ROOT_DIR, "dataset/research/driving_log.csv"),
+        "model_path": os.path.join(ROOT_DIR, "models/end2end_tank.h5")
     }
 }
+
