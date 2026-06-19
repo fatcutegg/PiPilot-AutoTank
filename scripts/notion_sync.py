@@ -181,7 +181,7 @@ def markdown_to_notion_blocks(markdown_text):
             code_content = []
             lang = line[3:].strip()
             i += 1
-            while i < len(lines) and not lines[i].startswith("```"):
+            while i < len(lines) and not lines[i].strip().startswith("```"):
                 code_content.append(lines[i])
                 i += 1
             blocks.append({
