@@ -1,0 +1,51 @@
+---
+Notion_Page_ID: 3840fc46-777e-8151-a2e4-dc6382f16948
+Notion_Parent_ID: 3590fc46777e80cea840f8f9b4833418
+---
+
+# 🔐 第2章：戦車にSSH免密接続しよう
+
+パソコンから戦車（Raspberry Pi）を操作するために、まずはネットワーク（Wi-Fi）を通じて接続できるように設定します。毎回パスワードを入力するのは大変なので、**「パスワードなし（免密接続）」**でログインできるように設定しましょう。
+
+---
+
+## 1. 同じ Wi-Fi に繋ごう
+パソコンと戦車が, 必ず**同じWi-Fiルーター（同一SSID）**に接続されていることを確認してください。
+
+---
+
+## 2. 戦車側で SSH を有効にし、CUIモードにしよう
+メモリを節約して戦車をキビキビ動かすために、画面表示のない軽量な**CUI（コマンドライン）モード**に変更します。戦車のターミナルで以下を実行します：
+```bash
+sudo raspi-config
+```
+*   **CUIモードへ変更**：`System Options` -> `Boot / Auto Login` から `Console` または `Console Autologin` を選択。
+*   **SSHの有効化**：`Interface Options` -> `SSH` から `Yes`（有効にする）を選択。
+*   設定が終わったら戦車を再起動します。
+
+---
+
+## 3. パソコン側で鍵を作って登録しよう
+パソコン側のターミナル（Windows の PowerShell や macOS のターミナル）を開き、以下の手順を実行します。
+
+1.  **接続用の鍵ペア（Key）を作成する**：
+    ```bash
+    ssh-keygen -t ed25519 -N "" -f ~/.ssh/tank_key
+    ```
+2.  **作った公開鍵を戦車へ転送する**（`pi` は戦車のユーザー名、`192.168.XXX.XXX` は戦車のIPアドレスに書き換えてください）：
+    ```bash
+    ssh-copy-id -i ~/.ssh/tank_key pi@192.168.XXX.XXX
+    ```
+3.  **接続設定ファイル（Config）を作成・編集する**：
+    パソコンの `~/.ssh/config` ファイルをエディタで開き、以下を追加します：
+    ```text
+    Host tank
+        HostName 192.168.XXX.XXX
+        User pi
+        IdentityFile ~/.ssh/tank_key
+    ```
+これで、パソコンのターミナルに **`ssh tank`** と入力して Enter を押すだけで、パスワードなしで一瞬で戦車に接続できるようになります！
+
+---
+
+👉 次は [第3章：Python環境とプログラムの準備](03_env_setup.md) へ

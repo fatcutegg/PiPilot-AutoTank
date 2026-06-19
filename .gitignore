@@ -69,3 +69,6 @@ checkpoints/
 # --- Documents & PDFs ---
 docs_pdf/
 *.pdf
+
+# --- Temporary & Scratch Files ---
+scratch/

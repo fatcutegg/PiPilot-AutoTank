@@ -30,8 +30,12 @@ def parse_rich_text(text):
             parts.append({"type": "text", "text": {"content": m.group(6)},
                           "annotations": {"code": True}})
         elif m.group(7): # [text](url)
-            parts.append({"type": "text",
-                          "text": {"content": m.group(8), "link": {"url": m.group(9)}}})
+            url = m.group(9)
+            if url.startswith("http://") or url.startswith("https://") or url.startswith("mailto:") or url.startswith("tel:"):
+                parts.append({"type": "text",
+                              "text": {"content": m.group(8), "link": {"url": url}}})
+            else:
+                parts.append({"type": "text", "text": {"content": m.group(8)}})
         last_end = m.end()
     if last_end < len(text):
         parts.append({"type": "text", "text": {"content": text[last_end:]}})
@@ -353,6 +357,7 @@ def main():
             pull_from_notion(args.file, notion)
     except Exception as e:
         print(f"❌ Operation failed: {e}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

@@ -21,6 +21,10 @@ CHILD_FILES = [
     "05_raspi_setup.md",
     "06_git.md",
     "07_python.md",
+    "08_ohmyzsh.md",
+    "09_chromebook_setup.md",
+    "10_github_ssh.md",
+    "11_scp.md",
 ]
 SCRIPT = os.path.join(os.path.dirname(__file__), "notion_sync.py")
 
