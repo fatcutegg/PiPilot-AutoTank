@@ -154,3 +154,10 @@ Raspberry PiのCPUは小さいため、PCや学習用サーバーにデータを
 2. **RESEARCH (研究モード)**:
    - より高度な回帰モデルを使用（`tf.data.Dataset`による非同期読み込み、Data Augmentation、BatchNormalizationを実装）。
    - 左右のキャタピラ(モーター)の出力を `-1.0` から `1.0` の間で滑らかに予測し、まるで本物の自動運転車のようにスムーズなカーブを描いて走行します。
+
+---
+
+## 📖 オンラインドキュメント (Notion)
+このプロジェクトのマニュアル（中学生向け・日本語）は、Notion 上でも公開・整理されています。
+最新のガイドはこちらから閲覧・確認可能です：
+🔗 [PiPilot-AutoTank オンラインマニュアル](https://app.notion.com/p/PiPilot-AutoTank-3590fc46777e80cea840f8f9b4833418)
