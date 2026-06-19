@@ -101,6 +101,49 @@ bash scripts/sync_to_pi.sh
 
 ---
 
+## 📊 データ収集とAIモデル学習 (Data Collection & Training)
+
+自動運転AIを動かすまでの基本的なワークフローは以下の通りです。
+
+### 1. 手動操縦によるデータ収集 (Data Collection)
+PC側のキーボードを使ってタンクを手動操縦し、自動運転に必要な「教師データ（カメラ映像と操作ログのペア）」を収集します。
+
+1. タンクにSSH接続した状態で、データ収集プログラムを起動します：
+   ```bash
+   python src/data_logger.py
+   ```
+2. キーボードで操縦します：
+   - `r` キー: データの記録を開始 / 一時停止（記録がオンの時、映像とPWM値がペアで保存されます）
+   - 方向キー（`↑` `↓` `←` `→`）: タンクを操作
+   - `q` キー: データを安全に保存して終了
+3. 収集されたデータは `dataset/` ディレクトリに保存されます。（目安として 3000〜5000枚 程度収集します）
+
+### 2. AIモデルの学習 (AI Model Training)
+Raspberry PiのCPUは小さいため、PCや学習用サーバーにデータを送信してAIモデルを作成（学習）します。
+
+1. 収集したデータをPCに転送するか、PC/学習用サーバー上で以下を実行してAIモデルを学習させます：
+   * **分類モデルの学習（教育用・5つの離散アクション）**:
+     ```bash
+     python training/train_classification.py
+     ```
+   * **回帰モデルの学習（研究用・スムーズな走行）**:
+     ```bash
+     python training/train_regression_model.py
+     ```
+2. 学習が完了すると、モデルファイル（例: `models/end2end_tank.h5`）が出力されます。
+
+### 3. モデルの転送と自律走行の実行 (Deployment & Autonomous Drive)
+1. 作成されたモデルをタンクへ転送します（モデルフォルダに配置）：
+   ```bash
+   scp models/end2end_tank.h5 pi@192.168.1.xxx:~/PiPilot-AutoTank/models/
+   ```
+2. タンク側で自律走行プログラムを起動します：
+   ```bash
+   python src/autonomous_drive.py
+   ```
+
+---
+
 ## 🤖 AIモデルと走行モード (AI Modes)
 
 `src/config.py` で `ACTIVE_MODE` を切り替えることで、2つの異なるAIを体験できます。
