@@ -6,6 +6,73 @@ import re
 from dotenv import load_dotenv
 from notion_client import Client
 
+import glob
+
+def build_notion_id_map(docs_dir="docs"):
+    """
+    Scans docs_dir for markdown files and extracts Notion_Page_ID.
+    Returns a dict mapping normalized relative paths (from docs_dir) to Notion page URLs.
+    """
+    id_map = {}
+    for path in glob.glob(os.path.join(docs_dir, "**", "*.md"), recursive=True):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                content = f.read()
+            # Simple frontmatter parsing
+            lines = content.split('\n')
+            if lines and lines[0].strip() == '---':
+                fm_lines = []
+                for line in lines[1:]:
+                    if line.strip() == '---':
+                        break
+                    fm_lines.append(line)
+                fm = yaml.safe_load('\n'.join(fm_lines)) or {}
+                page_id = fm.get("Notion_Page_ID")
+                if page_id and page_id != "REPLACE_WITH_YOUR_NOTION_PAGE_ID":
+                    clean_id = str(page_id).replace("-", "")
+                    rel_path = os.path.relpath(path, docs_dir)
+                    id_map[rel_path] = f"https://www.notion.so/{clean_id}"
+        except Exception as e:
+            print(f"Warning: Failed to extract ID from {path}: {e}")
+    return id_map
+
+def resolve_relative_links(md_content, current_file_path, id_map, docs_dir="docs"):
+    """
+    Finds all relative links in md_content and replaces them with their corresponding Notion URLs
+    if they exist in id_map.
+    """
+    current_dir = os.path.dirname(current_file_path)
+    
+    def replace_link(match):
+        text = match.group(1)
+        url = match.group(2)
+        
+        if url.startswith(("http://", "https://", "mailto:", "tel:")):
+            return match.group(0)
+            
+        if url.startswith("#"):
+            return match.group(0)
+            
+        parts = url.split('#')
+        link_path = parts[0]
+        anchor = f"#{parts[1]}" if len(parts) > 1 else ""
+        
+        if not link_path.endswith(".md"):
+            return match.group(0)
+            
+        abs_target_path = os.path.abspath(os.path.join(current_dir, link_path))
+        rel_target_path = os.path.relpath(abs_target_path, os.path.abspath(docs_dir))
+        
+        if rel_target_path in id_map:
+            notion_url = id_map[rel_target_path] + anchor
+            return f"[{text}]({notion_url})"
+        else:
+            print(f"Warning: Could not resolve relative link '{url}' in {current_file_path}")
+            return f"[{text}]"
+            
+    link_re = re.compile(r'\[([^\]]+)\]\(([^)]+)\)')
+    return link_re.sub(replace_link, md_content)
+
 def parse_rich_text(text):
     """Parses markdown inline styles (bold, italic, inline code, links) into Notion rich_text objects."""
     # Tokenize: split by **bold**, *italic*, `code`, [link](url)
@@ -236,6 +303,12 @@ def get_page_id_from_file(file_path):
 
 def push_to_notion(file_path, client):
     page_id, frontmatter, md_content = get_page_id_from_file(file_path)
+    
+    # Build ID map and resolve relative links
+    docs_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "docs"))
+    id_map = build_notion_id_map(docs_root)
+    md_content = resolve_relative_links(md_content, file_path, id_map, docs_root)
+    
     parent_id = frontmatter.get("Notion_Parent_ID")
     
     # Extract title from markdown
