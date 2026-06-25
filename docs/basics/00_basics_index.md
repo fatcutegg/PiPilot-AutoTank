@@ -19,6 +19,7 @@ Notion_Parent_ID: 3590fc46777e80cea840f8f9b4833418
 - 💻 [第9回：Chromebook Linux セットアップ — Chromebookで開発環境を作ろう](09_chromebook_setup.md)
 - 🐙 [第10回：GitHub SSHの設定 — パスワードなしでGitHubと安全に繋ごう](10_github_ssh.md)
 - ✈️ [第11回：SCP コマンド入門 — ネットワーク越しにファイルを安全に送信しよう](11_scp.md)
+- 🌐 [第12回：Tailscale 入門 — どこからでも戦車に安全に接続しよう](12_tailscale.md)
 
 ---
 
